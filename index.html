@@ -2,203 +2,208 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ülke Kapmaca Oyunu</title>
+    <title>Gelişmiş Ülke Savaşı</title>
     <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #1a1a1a;
-            color: white;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        #game-ui {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            pointer-events: none;
-            z-index: 10;
-        }
-        .controls {
-            background: rgba(0, 0, 0, 0.7);
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #444;
-        }
-        kbd {
-            background-color: #eee;
-            border-radius: 3px;
-            border: 1px solid #b4b4b4;
-            color: #333;
-            display: inline-block;
-            font-size: .85em;
-            font-weight: 700;
-            padding: 2px 4px;
-        }
+        body { margin: 0; overflow: hidden; background: #0f0f0f; color: white; font-family: sans-serif; }
+        #game-canvas { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 5; }
+        #ui { position: absolute; top: 20px; left: 20px; z-index: 100; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; border: 1px solid #333; pointer-events: auto; }
         .ulke {
             position: absolute;
-            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 12px;
+            font-size: 14px;
             font-weight: bold;
             cursor: pointer;
-            transition: transform 0.2s, border 0.2s;
+            transition: transform 0.3s, filter 0.3s;
             text-align: center;
-            box-shadow: 0 0 15px rgba(0,0,0,0.5);
-            user-select: none;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            z-index: 10;
         }
-        .secili {
-            border: 4px solid white !important;
-            transform: scale(1.1);
-        }
-        .log {
-            position: absolute;
-            bottom: 10px;
-            right: 10px;
-            width: 250px;
-            max-height: 200px;
-            overflow-y: auto;
-            background: rgba(0,0,0,0.8);
-            padding: 10px;
-            font-size: 13px;
-            border-radius: 5px;
-        }
+        .secili { outline: 4px solid white; outline-offset: 4px; transform: scale(1.05); z-index: 20 !important; }
+        .savas-animasyon { filter: brightness(1.5) contrast(1.2); animation: titreme 0.1s infinite; }
+        @keyframes titreme { 0% { transform: translate(1px, 1px); } 50% { transform: translate(-1px, -1px); } 100% { transform: translate(1px, -1px); } }
+        .log { position: fixed; bottom: 20px; right: 20px; width: 300px; height: 150px; background: rgba(0,0,0,0.7); overflow-y: auto; padding: 10px; font-size: 12px; border-radius: 5px; }
+        kbd { background: #444; padding: 2px 5px; border-radius: 3px; }
     </style>
 </head>
 <body>
 
-<div id="game-ui">
-    <div class="controls">
-        <h3>Ülke Oyunu v1.0</h3>
-        <p><kbd>Ü</kbd> - Yeni Ülke Kur</p>
-        <p><kbd>S</kbd> - Savaş (Önce ülke seç)</p>
-        <p><kbd>D</kbd> - Destek Gönder (Önce ülke seç)</p>
-        <div id="secili-bilgi">Seçili Ülke: Yok</div>
-    </div>
+<canvas id="game-canvas"></canvas>
+
+<div id="ui">
+    <h2 style="margin-top:0">Dünya Fatihi</h2>
+    <p><kbd>Ü</kbd> Ülke Kur / <kbd>S</kbd> Savaş / <kbd>D</kbd> Destek</p>
+    <div id="durum">Seçili: Yok</div>
 </div>
 
-<div id="log-kutusu" class="log">Oyun başladı...</div>
+<div id="log" class="log">Oyun başladı.</div>
 <div id="harita"></div>
 
 <script>
     const harita = document.getElementById('harita');
-    const logKutusu = document.getElementById('log-kutusu');
-    const seciliBilgi = document.getElementById('secili-bilgi');
+    const log = document.getElementById('log');
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+    
     let ulkeler = [];
     let seciliUlke = null;
+    let savas DevamEdiyor = false;
 
-    function mesajYaz(mesaj) {
-        const yeniMesaj = document.createElement('div');
-        yeniMesaj.innerText = mesaj;
-        logKutusu.prepend(yeniMesaj);
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    function mesaj(m) {
+        const d = document.createElement('div');
+        d.innerText = `> ${m}`;
+        log.prepend(d);
     }
 
-    function ulkeOlustur() {
-        const isim = prompt("Ülke ismini giriniz:");
-        if (!isim) return;
+    // Rastgele Şekil Oluşturucu
+    function rastgeleSekil() {
+        const noktalar = [];
+        for(let i=0; i<8; i++) {
+            noktalar.push(`${Math.random()*100}% ${Math.random()*100}%`);
+        }
+        return `polygon(${noktalar.join(', ')})`;
+    }
 
-        const boyut = Math.floor(Math.random() * 50) + 60; // 60-110px arası
+    function ulkeKur() {
+        const ad = prompt("Ülke Adı:");
+        if(!ad) return;
+
+        const boyut = 100 + Math.random() * 100;
         const x = Math.random() * (window.innerWidth - boyut);
         const y = Math.random() * (window.innerHeight - boyut);
-        
-        const yeniUlke = {
+        const renk = `hsl(${Math.random() * 360}, 70%, 50%)`;
+        const sekil = Math.random() > 0.5 ? rastgeleSekil() : 'none';
+
+        const yeni = {
             id: Date.now(),
-            ad: isim,
-            asker: Math.floor(Math.random() * 50) + 50,
-            renk: `hsl(${Math.random() * 360}, 70%, 50%)`,
-            x: x,
-            y: y,
-            boyut: boyut
+            ad: ad,
+            asker: 100,
+            renk: renk,
+            x: x, y: y,
+            boyut: boyut,
+            sekil: sekil,
+            div: null
         };
 
-        ulkeler.push(yeniUlke);
-        ulkeCiz(yeniUlke);
-        mesajYaz(`${yeniUlke.ad} kuruldu!`);
+        ulkeler.push(yeni);
+        cizUlke(yeni);
+        mesaj(`${ad} kuruldu!`);
     }
 
-    function ulkeCiz(ulke) {
+    function cizUlke(u) {
         const div = document.createElement('div');
-        div.id = `ulke-${ulke.id}`;
         div.className = 'ulke';
-        div.style.width = ulke.boyut + 'px';
-        div.style.height = ulke.boyut + 'px';
-        div.style.left = ulke.x + 'px';
-        div.style.top = ulke.y + 'px';
-        div.style.backgroundColor = ulke.renk;
-        div.innerHTML = `<span>${ulke.ad}<br>⚔️${ulke.asker}</span>`;
+        div.style.width = u.boyut + 'px';
+        div.style.height = u.boyut + 'px';
+        div.style.left = u.x + 'px';
+        div.style.top = u.y + 'px';
+        div.style.backgroundColor = u.renk;
+        if(u.sekil !== 'none') div.style.clipPath = u.sekil;
+        else div.style.borderRadius = (Math.random() * 50) + "%";
 
-        div.onclick = (e) => {
-            e.stopPropagation();
-            if (seciliUlke) {
-                const eskiDiv = document.getElementById(`ulke-${seciliUlke.id}`);
-                if (eskiDiv) eskiDiv.classList.remove('secili');
-            }
-            seciliUlke = ulke;
+        div.onclick = () => {
+            if(seciliUlke) seciliUlke.div.classList.remove('secili');
+            seciliUlke = u;
             div.classList.add('secili');
-            seciliBilgi.innerText = `Seçili Ülke: ${ulke.ad}`;
+            document.getElementById('durum').innerText = `Seçili: ${u.ad} (⚔️ ${Math.floor(u.asker)})`;
         };
 
+        u.div = div;
         harita.appendChild(div);
+        guncelleMetin(u);
     }
 
-    function guncelleUlke(ulke) {
-        const div = document.getElementById(`ulke-${ulke.id}`);
-        if (div) {
-            div.innerHTML = `<span>${ulke.ad}<br>⚔️${ulke.asker}</span>`;
-        }
+    function guncelleMetin(u) {
+        u.div.innerHTML = `<span>${u.ad}<br>⚔️${Math.floor(u.asker)}</span>`;
     }
 
-    function savas() {
-        if (!seciliUlke) {
-            alert("Savaşmak için önce bir ülke seçmelisin!");
-            return;
-        }
-
+    async function savas() {
+        if(!seciliUlke || savasDevamEdiyor) return;
         const rakipler = ulkeler.filter(u => u.id !== seciliUlke.id);
-        if (rakipler.length === 0) {
-            alert("Savaşacak başka ülke yok!");
-            return;
-        }
+        if(rakipler.length === 0) return;
 
+        savasDevamEdiyor = true;
         const rakip = rakipler[Math.floor(Math.random() * rakipler.length)];
-        mesajYaz(`${seciliUlke.ad} VS ${rakip.ad} savaşı başladı!`);
+        mesaj(`${seciliUlke.ad}, ${rakip.ad} ülkesine saldırdı!`);
 
-        // Basit Savaş Algoritması
-        const saldiriGucu = Math.random() * seciliUlke.asker;
-        const savunmaGucu = Math.random() * rakip.asker;
+        seciliUlke.div.classList.add('savas-animasyon');
+        rakip.div.classList.add('savas-animasyon');
 
-        if (saldiriGucu > savunmaGucu) {
-            const kayip = Math.floor(rakip.asker * 0.4);
-            rakip.asker -= kayip;
-            seciliUlke.asker += Math.floor(kayip / 2);
-            mesajYaz(`Kazanan: ${seciliUlke.ad}!`);
+        const savasDongusu = setInterval(() => {
+            // Asker Kayıpları (Rastgelelik ve güç dengesi)
+            const saldiri = Math.random() * 5;
+            const savunma = Math.random() * 5;
+
+            rakip.asker -= saldiri;
+            seciliUlke.asker -= savunma;
+
+            // Animasyon parçacıkları çiz
+            cizAskerEfekt(seciliUlke, rakip);
+
+            guncelleMetin(seciliUlke);
+            guncelleMetin(rakip);
+
+            if(rakip.asker <= 0 || seciliUlke.asker <= 0) {
+                clearInterval(savasDongusu);
+                savasBitti(seciliUlke, rakip);
+            }
+        }, 100);
+    }
+
+    function savasBitti(saldıran, savunan) {
+        savasDevamEdiyor = false;
+        saldıran.div.classList.remove('savas-animasyon');
+        savunan.div.classList.remove('savas-animasyon');
+        ctx.clearRect(0,0, canvas.width, canvas.height);
+
+        if(savunan.asker <= 0) {
+            mesaj(`${savunan.ad} haritadan silindi!`);
+            savunan.div.remove();
+            ulkeler = ulkeler.filter(u => u.id !== savunan.id);
+            saldıran.asker += 50; // Zafer primi
         } else {
-            const kayip = Math.floor(seciliUlke.asker * 0.4);
-            seciliUlke.asker -= kayip;
-            rakip.asker += Math.floor(kayip / 2);
-            mesajYaz(`Kazanan: ${rakip.ad}!`);
+            mesaj(`${saldıran.ad} geri çekildi!`);
+            saldıran.div.remove();
+            ulkeler = ulkeler.filter(u => u.id !== saldıran.id);
+            seciliUlke = null;
         }
+    }
 
-        guncelleUlke(seciliUlke);
-        guncelleUlke(rakip);
+    function cizAskerEfekt(kaynak, hedef) {
+        ctx.clearRect(0,0, canvas.width, canvas.height);
+        ctx.beginPath();
+        ctx.strokeStyle = kaynak.renk;
+        ctx.lineWidth = 2;
+        ctx.moveTo(kaynak.x + kaynak.boyut/2, kaynak.y + kaynak.boyut/2);
+        ctx.lineTo(hedef.x + hedef.boyut/2, hedef.y + hedef.boyut/2);
+        ctx.stroke();
+        
+        // Rastgele mermiler/askerler
+        for(let i=0; i<5; i++) {
+            ctx.fillStyle = "white";
+            const t = Math.random();
+            const px = (kaynak.x + kaynak.boyut/2) * (1-t) + (hedef.x + hedef.boyut/2) * t;
+            const py = (kaynak.y + kaynak.boyut/2) * (1-t) + (hedef.y + hedef.boyut/2) * t;
+            ctx.fillRect(px + (Math.random()*20-10), py + (Math.random()*20-10), 4, 4);
+        }
     }
 
     function destek() {
-        if (!seciliUlke) return;
-        const ekAsker = Math.floor(Math.random() * 20) + 10;
-        seciliUlke.asker += ekAsker;
-        mesajYaz(`${seciliUlke.ad} ülkesine ${ekAsker} asker takviyesi geldi.`);
-        guncelleUlke(seciliUlke);
+        if(!seciliUlke) return;
+        seciliUlke.asker += 30;
+        mesaj(`${seciliUlke.ad} asker takviyesi aldı.`);
+        guncelleMetin(seciliUlke);
     }
 
-    // Tuş Dinleyici
     window.onkeydown = (e) => {
         const key = e.key.toLowerCase();
-        if (key === 'ü') ulkeOlustur();
-        if (key === 's') savas();
-        if (key === 'd') destek();
+        if(key === 'ü') ulkeKur();
+        if(key === 's') savas();
+        if(key === 'd') destek();
     };
 </script>
 
