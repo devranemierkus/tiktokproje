@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ülke Kapmaca Oyunu</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1a1a1a;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #game-ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .controls {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+        kbd {
+            background-color: #eee;
+            border-radius: 3px;
+            border: 1px solid #b4b4b4;
+            color: #333;
+            display: inline-block;
+            font-size: .85em;
+            font-weight: 700;
+            padding: 2px 4px;
+        }
+        .ulke {
+            position: absolute;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, border 0.2s;
+            text-align: center;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            user-select: none;
+        }
+        .secili {
+            border: 4px solid white !important;
+            transform: scale(1.1);
+        }
+        .log {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 250px;
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            font-size: 13px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-ui">
+    <div class="controls">
+        <h3>Ülke Oyunu v1.0</h3>
+        <p><kbd>Ü</kbd> - Yeni Ülke Kur</p>
+        <p><kbd>S</kbd> - Savaş (Önce ülke seç)</p>
+        <p><kbd>D</kbd> - Destek Gönder (Önce ülke seç)</p>
+        <div id="secili-bilgi">Seçili Ülke: Yok</div>
+    </div>
+</div>
+
+<div id="log-kutusu" class="log">Oyun başladı...</div>
+<div id="harita"></div>
+
+<script>
+    const harita = document.getElementById('harita');
+    const logKutusu = document.getElementById('log-kutusu');
+    const seciliBilgi = document.getElementById('secili-bilgi');
+    let ulkeler = [];
+    let seciliUlke = null;
+
+    function mesajYaz(mesaj) {
+        const yeniMesaj = document.createElement('div');
+        yeniMesaj.innerText = mesaj;
+        logKutusu.prepend(yeniMesaj);
+    }
+
+    function ulkeOlustur() {
+        const isim = prompt("Ülke ismini giriniz:");
+        if (!isim) return;
+
+        const boyut = Math.floor(Math.random() * 50) + 60; // 60-110px arası
+        const x = Math.random() * (window.innerWidth - boyut);
+        const y = Math.random() * (window.innerHeight - boyut);
+        
+        const yeniUlke = {
+            id: Date.now(),
+            ad: isim,
+            asker: Math.floor(Math.random() * 50) + 50,
+            renk: `hsl(${Math.random() * 360}, 70%, 50%)`,
+            x: x,
+            y: y,
+            boyut: boyut
+        };
+
+        ulkeler.push(yeniUlke);
+        ulkeCiz(yeniUlke);
+        mesajYaz(`${yeniUlke.ad} kuruldu!`);
+    }
+
+    function ulkeCiz(ulke) {
+        const div = document.createElement('div');
+        div.id = `ulke-${ulke.id}`;
+        div.className = 'ulke';
+        div.style.width = ulke.boyut + 'px';
+        div.style.height = ulke.boyut + 'px';
+        div.style.left = ulke.x + 'px';
+        div.style.top = ulke.y + 'px';
+        div.style.backgroundColor = ulke.renk;
+        div.innerHTML = `<span>${ulke.ad}<br>⚔️${ulke.asker}</span>`;
+
+        div.onclick = (e) => {
+            e.stopPropagation();
+            if (seciliUlke) {
+                const eskiDiv = document.getElementById(`ulke-${seciliUlke.id}`);
+                if (eskiDiv) eskiDiv.classList.remove('secili');
+            }
+            seciliUlke = ulke;
+            div.classList.add('secili');
+            seciliBilgi.innerText = `Seçili Ülke: ${ulke.ad}`;
+        };
+
+        harita.appendChild(div);
+    }
+
+    function guncelleUlke(ulke) {
+        const div = document.getElementById(`ulke-${ulke.id}`);
+        if (div) {
+            div.innerHTML = `<span>${ulke.ad}<br>⚔️${ulke.asker}</span>`;
+        }
+    }
+
+    function savas() {
+        if (!seciliUlke) {
+            alert("Savaşmak için önce bir ülke seçmelisin!");
+            return;
+        }
+
+        const rakipler = ulkeler.filter(u => u.id !== seciliUlke.id);
+        if (rakipler.length === 0) {
+            alert("Savaşacak başka ülke yok!");
+            return;
+        }
+
+        const rakip = rakipler[Math.floor(Math.random() * rakipler.length)];
+        mesajYaz(`${seciliUlke.ad} VS ${rakip.ad} savaşı başladı!`);
+
+        // Basit Savaş Algoritması
+        const saldiriGucu = Math.random() * seciliUlke.asker;
+        const savunmaGucu = Math.random() * rakip.asker;
+
+        if (saldiriGucu > savunmaGucu) {
+            const kayip = Math.floor(rakip.asker * 0.4);
+            rakip.asker -= kayip;
+            seciliUlke.asker += Math.floor(kayip / 2);
+            mesajYaz(`Kazanan: ${seciliUlke.ad}!`);
+        } else {
+            const kayip = Math.floor(seciliUlke.asker * 0.4);
+            seciliUlke.asker -= kayip;
+            rakip.asker += Math.floor(kayip / 2);
+            mesajYaz(`Kazanan: ${rakip.ad}!`);
+        }
+
+        guncelleUlke(seciliUlke);
+        guncelleUlke(rakip);
+    }
+
+    function destek() {
+        if (!seciliUlke) return;
+        const ekAsker = Math.floor(Math.random() * 20) + 10;
+        seciliUlke.asker += ekAsker;
+        mesajYaz(`${seciliUlke.ad} ülkesine ${ekAsker} asker takviyesi geldi.`);
+        guncelleUlke(seciliUlke);
+    }
+
+    // Tuş Dinleyici
+    window.onkeydown = (e) => {
+        const key = e.key.toLowerCase();
+        if (key === 'ü') ulkeOlustur();
+        if (key === 's') savas();
+        if (key === 'd') destek();
+    };
+</script>
+
+</body>
+</html>
